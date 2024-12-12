@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>2048游戏</title>
+<style>
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #faf8ef;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.header {
+    width: 500px;
+    margin-top: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.left-panel {
+    display: flex;
+    align-items: center;
+}
+
+.title {
+    font-size: 48px;
+    font-weight: bold;
+    color: #776e65;
+    margin-right: 20px;
+}
+
+.score-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: #bbada0;
+    color: #ffffff;
+    border-radius: 3px;
+    padding: 10px;
+    min-width: 80px;
+    margin-right: 20px;
+    position: relative;
+    overflow: visible;
+}
+
+.score-diff {
+    position: absolute;
+    top: 0;
+    right: 0;
+    transform: translate(100%, 0);
+    font-size: 16px;
+    background: rgba(0,0,0,0.2);
+    padding: 2px 5px;
+    border-radius: 3px;
+    animation: score-diff-move 1.5s ease forwards;
+    pointer-events: none;
+    white-space: nowrap;
+    color: #fff;
+}
+
+@keyframes score-diff-move {
+    0% {opacity: 1; transform: translate(100%,0) scale(1);}
+    50% {transform: translate(100%, -10px) scale(1.2);}
+    100% {opacity: 0; transform: translate(100%, -40px) scale(1);}
+}
+
+.control-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.restart-button, .undo-button, .toggle-button {
+    background: #8f7a66;
+    color: #f9f6f2;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+.restart-button:hover, .undo-button:hover, .toggle-button:hover {
+    background: #9f8b77;
+}
+
+.game-container {
+    position: relative;
+    width: 500px;
+    height: 500px;
+    margin-top: 20px;
+}
+
+.grid-background {
+    position: absolute;
+    top:0; left:0;
+    width: 100%; height: 100%;
+    background: #bbada0;
+    border-radius: 10px;
+    padding: 10px;
+    box-sizing: border-box;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(4, 1fr);
+    gap: 10px;
+}
+
+.grid-background .bg-cell {
+    background: #cdc1b4;
+    border-radius: 3px;
+}
+
+.tiles-container {
+    position: absolute;
+    top:10px; left:10px;
+    width:calc(100% - 20px);
+    height:calc(100% - 20px);
+    box-sizing: border-box;
+}
+
+.tile {
+    position: absolute;
+    width: calc((100% - (3 * 10px)) / 4);
+    height: calc((100% - (3 * 10px)) / 4);
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 55px;
+    font-weight: bold;
+    color: #776e65;
+    transition: transform 0.1s ease-in, top 0.1s ease, left 0.1s ease;
+    will-change: transform, top, left;
+    box-sizing: border-box;
+    pointer-events: auto;
+}
+
+.tile-2 { background: #eee4da; color: #776e65; }
+.tile-4 { background: #ede0c8; color: #776e65; }
+.tile-8 { background: #f2b179; color: #f9f6f2; }
+.tile-16 { background: #f59563; color: #f9f6f2; }
+.tile-32 { background: #f67c5f; color: #f9f6f2; }
+.tile-64 { background: #f65e3b; color: #f9f6f2; }
+.tile-128 { background: #edcf72; color: #f9f6f2; font-size: 45px; }
+.tile-256 { background: #edcc61; color: #f9f6f2; font-size: 45px; }
+.tile-512 { background: #edc850; color: #f9f6f2; font-size: 45px; }
+.tile-1024 { background: #edc53f; color: #f9f6f2; font-size: 35px; }
+.tile-2048 { background: #edc22e; color: #f9f6f2; font-size: 35px; }
+
+/* 对2048以上的块统一使用黑底白字 */
+.tile-super {
+    background: #000000 !important;
+    color: #ffffff !important;
+    font-size: 35px !important;
+}
+
+.tile-new {
+    animation: tile-new-anim 0.3s ease;
+}
+@keyframes tile-new-anim {
+    0% {transform: scale(0); opacity:0;}
+    100% {transform: scale(1); opacity:1;}
+}
+
+.tile-merged {
+    animation: tile-merge-anim 0.3s ease;
+}
+@keyframes tile-merge-anim {
+    0% {transform: scale(1.2); }
+    100% {transform: scale(1);}
+}
+
+.footer {
+    margin-top: 10px;
+    font-size: 12px;
+    color: gray;
+}
+</style>
+</head>
+<body>
+<div class="header">
+    <div class="left-panel">
+        <div class="title">2048</div>
+        <div class="score-container">
+            <div>分数</div>
+            <div id="score">0</div>
+        </div>
+    </div>
+    <div class="control-container">
+        <button class="undo-button" id="undo">撤销</button>
+        <button class="restart-button" id="restart">重新开始</button>
+        <button class="toggle-button" id="toggleMode"></button>
+    </div>
+</div>
+<div class="game-container">
+    <div class="grid-background" id="grid-bg">
+        <div class="bg-cell"></div><div class="bg-cell"></div><div class="bg-cell"></div><div class="bg-cell"></div>
+        <div class="bg-cell"></div><div class="bg-cell"></div><div class="bg-cell"></div><div class="bg-cell"></div>
+        <div class="bg-cell"></div><div class="bg-cell"></div><div class="bg-cell"></div><div class="bg-cell"></div>
+        <div class="bg-cell"></div><div class="bg-cell"></div><div class="bg-cell"></div><div class="bg-cell"></div>
+    </div>
+    <div class="tiles-container" id="tiles"></div>
+</div>
+<div class="footer">
+    By Lixin<br>
+    有三种模式可以选择<br>
+    谁都能通关的2048
+</div>
+
+<script>
+(function() {
+    const GRID_SIZE = 4;
+    const STORAGE_KEY = "2048_game_state";
+    const MAX_HISTORY = 10;
+    // 模式定义：0=正常(90%出2,10%出4)，1=只出2(100%2)，2=只出4(100%4)
+    let mode = 0; 
+    let grid = [];
+    let score = 0;
+    let history = [];
+    let tileIdCounter = 0;
+
+    function newTile(value) {
+        return { value: value, id: tileIdCounter++ };
+    }
+
+    function copyState() {
+        return {
+            grid: JSON.parse(JSON.stringify(grid)),
+            score: score,
+            tileIdCounter: tileIdCounter,
+            mode: mode
+        };
+    }
+
+    function pushHistory() {
+        const state = copyState();
+        history.push(state);
+        if (history.length > MAX_HISTORY) {
+            history.shift();
+        }
+    }
+
+    function undo() {
+        if (history.length > 0) {
+            const lastState = history.pop();
+            const oldScore = score;
+            grid = lastState.grid;
+            score = lastState.score;
+            tileIdCounter = lastState.tileIdCounter;
+            mode = lastState.mode;
+            updateUI(true);
+            saveToStorage();
+            showScoreChange(score - oldScore);
+            updateToggleButtonText();
+        }
+    }
+
+    function init() {
+        loadFromStorage();
+        if (grid.length === 0) {
+            for (let i = 0; i < GRID_SIZE; i++) {
+                grid[i] = [];
+                for (let j = 0; j < GRID_SIZE; j++) {
+                    grid[i][j] = 0;
+                }
+            }
+            spawnTile();
+            spawnTile();
+        }
+        updateUI(true);
+        updateToggleButtonText();
+    }
+
+    function showScoreChange(diff) {
+        if (diff === 0) return;
+        const scoreContainer = document.querySelector('.score-container');
+        const diffEl = document.createElement('div');
+        diffEl.className = 'score-diff';
+        diffEl.textContent = (diff > 0 ? '+' : '') + diff;
+        scoreContainer.appendChild(diffEl);
+        setTimeout(() => {
+            if (diffEl && diffEl.parentNode) {
+                diffEl.parentNode.removeChild(diffEl);
+            }
+        }, 1500);
+    }
+
+    function tilePosition(i, j) {
+        const cellSize = (500 - 10*(GRID_SIZE+1)) / GRID_SIZE;
+        const top = i*(cellSize+10);
+        const left = j*(cellSize+10);
+        return {top, left};
+    }
+
+    let lastTilesMap = new Map();
+
+    function updateUI(smooth=false) {
+        const tilesContainer = document.getElementById('tiles');
+        const oldTilesMap = lastTilesMap;
+        lastTilesMap = new Map();
+
+        for (let i = 0; i < GRID_SIZE; i++) {
+            for (let j = 0; j < GRID_SIZE; j++) {
+                const cell = grid[i][j];
+                if (cell !== 0) {
+                    lastTilesMap.set(cell.id, {value: cell.value, x:i, y:j});
+                }
+            }
+        }
+
+        const existingEls = Array.from(tilesContainer.querySelectorAll('.tile'));
+        const existingMap = new Map();
+        for (let el of existingEls) {
+            existingMap.set(+el.getAttribute('data-id'), el);
+        }
+
+        for (let [id, info] of lastTilesMap.entries()) {
+            let el = existingMap.get(id);
+            const pos = tilePosition(info.x, info.y);
+            if (!el) {
+                el = document.createElement('div');
+                let tileClass = 'tile-' + info.value;
+                if (info.value > 2048) {
+                    tileClass = 'tile-super';
+                }
+                el.classList.add('tile', tileClass, 'tile-new');
+                el.setAttribute('data-id', id);
+                el.textContent = info.value;
+                el.style.top = pos.top + 'px';
+                el.style.left = pos.left + 'px';
+                tilesContainer.appendChild(el);
+            } else {
+                existingMap.delete(id);
+                const oldInfo = oldTilesMap.get(id);
+                if (oldInfo && oldInfo.value !== info.value) {
+                    // 更新class
+                    let tileClass = 'tile-' + info.value;
+                    if (info.value > 2048) {
+                        tileClass = 'tile-super';
+                    }
+                    // 移除旧class
+                    el.className = 'tile ' + tileClass + ' tile-merged';
+                    el.textContent = info.value;
+                } else {
+                    // 如果值大于2048且未变化，仍要更新class
+                    if (info.value > 2048) {
+                        el.className = 'tile tile-super';
+                        el.textContent = info.value;
+                    }
+                }
+                if (smooth) {
+                    el.style.transition = 'none';
+                    void el.offsetWidth;
+                    el.style.top = pos.top + 'px';
+                    el.style.left = pos.left + 'px';
+                    setTimeout(()=> {
+                        el.style.transition = '';
+                    },0);
+                } else {
+                    el.style.top = pos.top + 'px';
+                    el.style.left = pos.left + 'px';
+                }
+            }
+        }
+
+        for (let [id, el] of existingMap.entries()) {
+            tilesContainer.removeChild(el);
+        }
+
+        document.getElementById('score').textContent = score;
+    }
+
+    function spawnTile() {
+        const emptyCells = [];
+        for (let i = 0; i < GRID_SIZE; i++) {
+            for (let j = 0; j < GRID_SIZE; j++) {
+                if (grid[i][j] === 0) {
+                    emptyCells.push({x:i,y:j});
+                }
+            }
+        }
+        if (emptyCells.length === 0) return false;
+        const {x,y} = emptyCells[Math.floor(Math.random()*emptyCells.length)];
+
+        let val;
+        if (mode === 0) { 
+            // 正常模式
+            val = Math.random()<0.9 ? 2 : 4;
+        } else if (mode === 1) {
+            // 只出2
+            val = 2;
+        } else {
+            // 只出4
+            val = 4;
+        }
+
+        grid[x][y] = newTile(val);
+        return true;
+    }
+
+    function moveLine(line) {
+        let arr = line.filter(x => x!==0);
+        let moved = false;
+        let scoreInc = 0;
+        for (let j = 0; j < arr.length - 1; j++) {
+            if (arr[j].value === arr[j+1].value) {
+                arr[j] = newTile(arr[j].value*2);
+                scoreInc += arr[j].value;
+                arr.splice(j+1,1);
+            }
+        }
+        while (arr.length < GRID_SIZE) {
+            arr.push(0);
+        }
+        if (arr.toString() !== line.toString()) {
+            moved = true;
+        }
+        return {newLine: arr, moved, scoreInc};
+    }
+
+    function moveTilesLeft() {
+        let moved = false;
+        let scoreIncrement = 0;
+        for (let i = 0; i < GRID_SIZE; i++) {
+            const line = grid[i];
+            const {newLine, moved:lineMoved, scoreInc} = moveLine(line);
+            grid[i] = newLine;
+            if (lineMoved) {
+                moved = true;
+                scoreIncrement += scoreInc;
+            }
+        }
+        return {moved, scoreIncrement};
+    }
+
+    function transposeGrid() {
+        let newGrid = [];
+        for (let i=0; i<GRID_SIZE; i++){
+            newGrid[i]=[];
+            for (let j=0; j<GRID_SIZE; j++){
+                newGrid[i][j]=grid[j][i];
+            }
+        }
+        grid=newGrid;
+    }
+
+    function reverseRows() {
+        for (let i=0; i<GRID_SIZE; i++){
+            grid[i].reverse();
+        }
+    }
+
+    function moveTilesRight() {
+        reverseRows();
+        let result = moveTilesLeft();
+        reverseRows();
+        return result;
+    }
+
+    function moveTilesUp() {
+        transposeGrid();
+        let result = moveTilesLeft();
+        transposeGrid();
+        return result;
+    }
+
+    function moveTilesDown() {
+        transposeGrid();
+        reverseRows();
+        let result = moveTilesLeft();
+        reverseRows();
+        transposeGrid();
+        return result;
+    }
+
+    function isGameOver() {
+        for (let i = 0; i < GRID_SIZE; i++) {
+            for (let j = 0; j < GRID_SIZE; j++) {
+                const cell = grid[i][j];
+                if (cell === 0) return false;
+            }
+        }
+        for (let i = 0; i < GRID_SIZE; i++) {
+            for (let j = 0; j < GRID_SIZE; j++) {
+                const cell = grid[i][j];
+                if (j < GRID_SIZE - 1 && cell && grid[i][j+1] && cell.value === grid[i][j+1].value) return false;
+                if (i < GRID_SIZE - 1 && cell && grid[i+1][j] && cell.value === grid[i+1][j].value) return false;
+            }
+        }
+        return true;
+    }
+
+    document.addEventListener('keydown', (e) => {
+        let result = {moved:false, scoreIncrement:0};
+        let oldScore = score;
+        let validKey = true;
+        switch (e.key) {
+            case 'ArrowLeft':
+                pushHistory();
+                result = moveTilesLeft();
+                break;
+            case 'ArrowRight':
+                pushHistory();
+                result = moveTilesRight();
+                break;
+            case 'ArrowUp':
+                pushHistory();
+                result = moveTilesUp();
+                break;
+            case 'ArrowDown':
+                pushHistory();
+                result = moveTilesDown();
+                break;
+            default:
+                validKey = false;
+        }
+        if (validKey && result.moved) {
+            score += result.scoreIncrement;
+            spawnTile();
+            updateUI();
+            saveToStorage();
+            showScoreChange(score - oldScore);
+            requestAnimationFrame(() => {
+                if (isGameOver()) {
+                    alert('游戏结束！');
+                }
+            });
+        } else if (validKey && !result.moved) {
+            history.pop();
+        }
+    });
+
+    document.querySelector('.game-container').addEventListener('click', (e) => {
+        if (e.target.classList.contains('tile')) {
+            if (e.shiftKey) {
+                const id = +e.target.getAttribute('data-id');
+                let tileX = -1, tileY = -1, val=0;
+                outer: for (let i=0;i<GRID_SIZE;i++){
+                    for(let j=0;j<GRID_SIZE;j++){
+                        if(grid[i][j]!==0 && grid[i][j].id===id){
+                            tileX=i;tileY=j;val=grid[i][j].value;
+                            break outer;
+                        }
+                    }
+                }
+                if (tileX>=0 && tileY>=0) {
+                    let oldScore = score;
+                    pushHistory();
+                    grid[tileX][tileY]=0;
+                    score -= val;
+                    updateUI();
+                    saveToStorage();
+                    showScoreChange(score - oldScore);
+                }
+            }
+        }
+    });
+
+    function saveToStorage() {
+        const state = {
+            grid: grid,
+            score: score,
+            tileIdCounter: tileIdCounter,
+            mode: mode
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    function loadFromStorage() {
+        const data = localStorage.getItem(STORAGE_KEY);
+        if (data) {
+            const state = JSON.parse(data);
+            grid = state.grid;
+            score = state.score;
+            tileIdCounter = state.tileIdCounter || 0;
+            mode = state.mode || 0;
+        } else {
+            grid = [];
+            score = 0;
+            tileIdCounter=0;
+            mode=0;
+        }
+    }
+
+    window.addEventListener('beforeunload', saveToStorage);
+
+    document.getElementById('restart').addEventListener('click', () => {
+        pushHistory();
+        let oldScore = score;
+        for (let i = 0; i < GRID_SIZE; i++) {
+            for (let j = 0; j < GRID_SIZE; j++) {
+                grid[i][j] = 0;
+            }
+        }
+        score = 0;
+        spawnTile();
+        spawnTile();
+        updateUI(true);
+        saveToStorage();
+        showScoreChange(score - oldScore);
+    });
+
+    document.getElementById('undo').addEventListener('click', () => {
+        undo();
+    });
+
+    // 模式：0=正常,1=只出2,2=只出4
+    function updateToggleButtonText(){
+        const btn = document.getElementById('toggleMode');
+        let text;
+        if (mode === 0) {
+            text = "正常";
+        } else if (mode === 1) {
+            text = "只出2";
+        } else {
+            text = "只出4";
+        }
+        btn.textContent = text;
+    }
+
+    document.getElementById('toggleMode').addEventListener('click', () => {
+        // 循环切换模式
+        mode = (mode + 1) % 3;
+        updateToggleButtonText();
+        saveToStorage();
+        // 下次生成块时生效
+    });
+
+    init();
+})();
+</script>
+</body>
+</html>
